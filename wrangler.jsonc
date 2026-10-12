@@ -1,0 +1,55 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "brain",
+  "main": "src/server/cloudflare.ts",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"],
+  },
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "COMPANION",
+        "class_name": "Companion",
+      },
+    ],
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["Companion"],
+    },
+  ],
+  "observability": {
+    "enabled": false,
+  },
+  "vars": {
+    "BESIDE_DEPLOYMENT": "cloudflare",
+  },
+  "env": {
+    "preview": {
+      "name": "brain-preview",
+      "durable_objects": {
+        "bindings": [
+          {
+            "name": "COMPANION",
+            "class_name": "Companion",
+          },
+        ],
+      },
+      "migrations": [
+        {
+          "tag": "v1",
+          "new_sqlite_classes": ["Companion"],
+        },
+      ],
+      "vars": {
+        "BESIDE_DEPLOYMENT": "cloudflare",
+      },
+    },
+  },
+}
