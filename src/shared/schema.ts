@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { flowSchema } from "./continuity";
 export const text = z.string().trim().min(1).max(5000);
 export const short = z.string().trim().min(1).max(240);
 export const id = z.string().min(1).max(100);
@@ -181,6 +182,21 @@ export const settingsSchema = z.object({
 });
 export type Settings = z.infer<typeof settingsSchema>;
 export const toolSchemas = {
+  "conversation.begin": z.object({
+    flow: flowSchema,
+    recordId: id.optional(),
+    title: short.optional(),
+  }),
+  "conversation.answer": z.object({
+    id,
+    version: z.number().int().positive(),
+    value: z.string().trim().min(1).max(5000),
+  }),
+  "conversation.pause": z.object({ id, version: z.number().int().positive() }),
+  "conversation.back": z.object({ id, version: z.number().int().positive() }),
+  "conversation.resume": z.object({ id }),
+  "proposal.apply": z.object({ id }),
+  "proposal.dismiss": z.object({ id }),
   "record.create": z.object({
     kind: kindSchema,
     title: short,

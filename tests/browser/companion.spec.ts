@@ -24,11 +24,10 @@ test("desktop companion: capture, convert, checkpoint, reload and resume", async
     fullPage: true,
   });
   await page.getByRole("button", { name: "Hold this", exact: true }).click();
-  await page.getByLabel("A short label").fill("Passport paperwork");
   await page
-    .getByLabel("The thought, text, or link")
-    .fill("Renew passport before the trip");
-  await page.getByRole("button", { name: "Save", exact: true }).click();
+    .getByLabel("What would you like me to hold onto?")
+    .fill("Passport paperwork before the trip");
+  await page.getByRole("button", { name: "Continue", exact: true }).click();
   await page
     .getByRole("button", { name: "Things you’ve held", exact: true })
     .click();
@@ -40,14 +39,15 @@ test("desktop companion: capture, convert, checkpoint, reload and resume", async
   await page
     .getByRole("button", { name: "Save my place", exact: true })
     .click();
-  await page.getByLabel("Give this a name").fill("Passport form");
-  await page.getByLabel("What were you trying to do?").fill("Renew passport");
+  await page.getByLabel("What are you working on?").fill("Passport form");
+  await page.getByRole("button", { name: "Continue", exact: true }).click();
   await page.getByLabel("Where are you leaving off?").fill("at section two");
-  await page.getByLabel("The very next action").fill("Upload my photo");
+  await page.getByRole("button", { name: "Continue", exact: true }).click();
   await page
-    .getByRole("button", { name: "Save my place", exact: true })
-    .last()
-    .click();
+    .getByLabel("What is the very next thing to do when you come back?")
+    .fill("Upload my photo");
+  await page.getByRole("button", { name: "Continue", exact: true }).click();
+  await page.getByRole("button", { name: "Skip for now", exact: true }).click();
   await page.reload();
   await page
     .getByRole("button", { name: "Your companion", exact: true })
@@ -72,8 +72,10 @@ test("mobile keyboard, start help, capacity and all ten workflow choices", async
   await page
     .getByLabel("What are you trying to start?")
     .fill("Write the first email");
-  await page.getByLabel("It feels difficult", { exact: true }).check();
-  await page.getByRole("button", { name: "Find one first step" }).click();
+  await page.getByRole("button", { name: "Continue", exact: true }).click();
+  await page
+    .getByRole("button", { name: "It feels difficult", exact: true })
+    .click();
   await expect(
     page.getByText(/Write a private, unsent first sentence/).first(),
   ).toBeVisible();
@@ -141,12 +143,7 @@ test("return never claims submission and reminder/permission controls are functi
     .uncheck();
   await page.getByRole("button", { name: "Your companion" }).click();
   await page.getByRole("button", { name: "Hold this", exact: true }).click();
-  await page.getByLabel("A short label").fill("Blocked");
-  await page.getByLabel("The thought, text, or link").fill("Should not save");
-  await page.getByRole("button", { name: "Save", exact: true }).click();
-  await expect(page.getByRole("dialog").getByRole("alert")).toContainText(
-    "permission",
-  );
+  await expect(page.getByRole("alert")).toContainText("permission");
 });
 
 test("accessible contrast, keyboard labels and landmarks on mobile and desktop", async ({
@@ -161,4 +158,128 @@ test("accessible contrast, keyboard labels and landmarks on mobile and desktop",
       .analyze();
     expect(results.violations).toEqual([]);
   }
+});
+
+test("a conversational return survives interruption and carries the same task to confirmation", async ({
+  page,
+  request,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/");
+  await page
+    .getByRole("button", { name: "A few more ways I can help" })
+    .click();
+  await page.getByRole("button", { name: /Carry it through/ }).click();
+  await page.getByRole("button", { name: "A return or refund" }).click();
+  await page
+    .getByLabel("What needs returning?")
+    .fill("Return the unworn shoes");
+  await page.getByRole("button", { name: "Continue", exact: true }).click();
+  await page.reload();
+  await page
+    .getByLabel("What do you already know or have handy?")
+    .fill("Order 42, purchased on October 1");
+  await page.getByRole("button", { name: "Continue", exact: true }).click();
+  await page.getByRole("button", { name: "Skip for now", exact: true }).click();
+  const keeping = page.getByRole("region", {
+    name: "Keeping track",
+    exact: true,
+  });
+  await expect(keeping.getByText("Ready for your review")).toBeVisible();
+  await keeping.getByText("Prepared draft · unsent", { exact: true }).click();
+  await expect(
+    keeping.getByText(/Order 42, purchased on October 1/),
+  ).toBeVisible();
+  await keeping
+    .getByRole("button", { name: "Pick this up", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "I've submitted it myself", exact: true })
+    .click();
+  await page
+    .getByLabel(
+      "What did you submit, and what receipt or evidence did you get?",
+    )
+    .fill("I submitted the return and received receipt A12");
+  await page.getByRole("button", { name: "Continue", exact: true }).click();
+  await page
+    .getByLabel("Who or what are we waiting for?")
+    .fill("The shop refund team");
+  await page.getByRole("button", { name: "Continue", exact: true }).click();
+  await page.reload();
+  await expect(
+    keeping.getByText("Waiting for a response", { exact: true }),
+  ).toBeVisible();
+  await expect(keeping.getByText(/Next scheduled check/)).toBeVisible();
+  await page.screenshot({
+    path: "test-results/beside-continuity-mobile.png",
+    fullPage: true,
+  });
+  const { default: AxeBuilder } = await import("@axe-core/playwright");
+  expect(
+    (
+      await new AxeBuilder({ page })
+        .withTags(["wcag2a", "wcag2aa", "wcag21aa"])
+        .analyze()
+    ).violations,
+  ).toEqual([]);
+  await keeping
+    .getByRole("button", { name: "Pick this up", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "I have the confirmed outcome", exact: true })
+    .click();
+  await page
+    .getByLabel("What happened that confirms it is finished?")
+    .fill("The refund arrived on my card, reference R56");
+  await page.getByRole("button", { name: "Continue", exact: true }).click();
+  const state = await (await request.get("/api/state")).json();
+  expect(state.records.filter((r: any) => r.kind === "task")).toHaveLength(1);
+  expect(state.records.find((r: any) => r.kind === "task").status).toBe(
+    "confirmed",
+  );
+});
+
+test("paused conversations are recoverable, editable, and keyboard accessible", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "I’m stuck", exact: true }).click();
+  await page.getByLabel("What are you trying to start?").fill("Write a letter");
+  await page.getByRole("button", { name: "Continue", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Change my last answer", exact: true })
+    .click();
+  await page
+    .getByLabel("What are you trying to start?")
+    .fill("Write a reply to Alec");
+  await page.getByRole("button", { name: "Continue", exact: true }).click();
+  await page.getByRole("button", { name: /Save this spot/ }).click();
+  await page.reload();
+  await page
+    .getByRole("region", { name: "Keeping track", exact: true })
+    .getByRole("button", { name: /Write a reply to Alec/ })
+    .click();
+  await expect(
+    page.getByRole("heading", {
+      name: "What would help me meet you where you are?",
+    }),
+  ).toBeVisible();
+  const { default: AxeBuilder } = await import("@axe-core/playwright");
+  expect(
+    (
+      await new AxeBuilder({ page })
+        .withTags(["wcag2a", "wcag2aa", "wcag21aa"])
+        .analyze()
+    ).violations,
+  ).toEqual([]);
+  await page
+    .getByRole("button", { name: "It feels difficult", exact: true })
+    .focus();
+  await page.keyboard.press("Enter");
+  await expect(
+    page
+      .getByRole("region", { name: "Keeping track", exact: true })
+      .getByRole("button", { name: "Write a reply to Alec", exact: true }),
+  ).toBeVisible();
 });

@@ -9,6 +9,7 @@ import {
 import { localToInstant, subtractMinutes, validTimezone } from "../shared/time";
 import { Store } from "./store";
 import { reconcileRecord, schedule, terminal } from "./jobs";
+import { conversation } from "./continuity";
 const READ_ONLY = new Set<ToolName>([
   "checkpoint.resume",
   "priority.next",
@@ -182,6 +183,46 @@ export function executeTool(
   return resultSchema.parse(result) as ToolResult;
   function run(): ToolResult {
     switch (name) {
+      case "conversation.begin":
+      case "conversation.answer":
+      case "conversation.pause":
+      case "conversation.back":
+      case "conversation.resume":
+        return conversation(store, name.split(".")[1], args, (n, input) =>
+          executeTool(store, n, input),
+        );
+      case "proposal.dismiss":
+        store.db.run(
+          "DELETE FROM companion_proposals WHERE id=? AND profile_id=?",
+          args.id,
+          store.profileId,
+        );
+        return { message: "Suggestion set aside. Nothing was applied." };
+      case "proposal.apply": {
+        const row = store.db.all(
+          "SELECT proposal FROM companion_proposals WHERE id=? AND profile_id=?",
+          args.id,
+          store.profileId,
+        )[0];
+        if (!row)
+          throw Error(
+            "This suggestion was already handled or is no longer available.",
+          );
+        const proposal = JSON.parse(row.proposal);
+        if (
+          !["record.create", "record.update", "conversation.begin"].includes(
+            proposal.name,
+          )
+        )
+          throw Error("This suggestion is not an allowed action.");
+        const output = executeTool(store, proposal.name, proposal.input);
+        store.db.run(
+          "DELETE FROM companion_proposals WHERE id=? AND profile_id=?",
+          args.id,
+          store.profileId,
+        );
+        return output;
+      }
       case "record.create": {
         const data = validateData(args.kind, args.data, store);
         const status =
@@ -219,7 +260,7 @@ export function executeTool(
         store.forget(args.id);
         return {
           message:
-            "Forgotten. It is removed from search and future context. Conversation history was cleared to remove retained copies.",
+            "Forgotten. It is removed from search and future context. Conversation history, unfinished conversations, and pending suggestions were cleared to remove retained copies.",
         };
       case "record.undo": {
         const r = store.undo(args.id);

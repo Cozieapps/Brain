@@ -1,5 +1,6 @@
 import migration from "../../migrations/001_initial";
 import reminderMigration from "../../migrations/002_reminder_intent";
+import continuityMigration from "../../migrations/003_continuity";
 import {
   settingsSchema,
   type Kind,
@@ -26,6 +27,10 @@ export class Store {
         !db.all("SELECT version FROM schema_migrations WHERE version=2").length
       )
         db.exec(reminderMigration);
+      if (
+        !db.all("SELECT version FROM schema_migrations WHERE version=3").length
+      )
+        db.exec(continuityMigration);
     });
     this.ensureProfile();
   }
@@ -177,6 +182,13 @@ export class Store {
         this.profileId,
       );
       this.index(next);
+      if (["completed", "confirmed", "dropped"].includes(next.status))
+        this.db.run(
+          "UPDATE companion_threads SET status='finished',version=version+1,updated_at=? WHERE profile_id=? AND record_id=? AND status!='finished'",
+          this.now(),
+          this.profileId,
+          next.id,
+        );
       return next;
     });
   }
@@ -221,6 +233,15 @@ export class Store {
       );
       // Previously generated conversation context could retain a forgotten fact. Clear it too.
       this.db.run("DELETE FROM messages WHERE profile_id=?", this.profileId);
+      // Draft conversations and pending proposals can contain copies of the forgotten context.
+      this.db.run(
+        "DELETE FROM companion_threads WHERE profile_id=?",
+        this.profileId,
+      );
+      this.db.run(
+        "DELETE FROM companion_proposals WHERE profile_id=?",
+        this.profileId,
+      );
       this.invalidateContext();
     });
   }
@@ -324,6 +345,14 @@ export class Store {
       format: "beside-v1",
       exportedAt: this.now(),
       settings: this.settings(),
+      conversations: this.db.all(
+        "SELECT * FROM companion_threads WHERE profile_id=?",
+        this.profileId,
+      ),
+      proposals: this.db.all(
+        "SELECT * FROM companion_proposals WHERE profile_id=?",
+        this.profileId,
+      ),
       records: this.db
         .all(
           "SELECT * FROM records WHERE profile_id=? ORDER BY created_at",
@@ -372,6 +401,8 @@ export class Store {
         "notifications",
         "attachments",
         "usage",
+        "companion_threads",
+        "companion_proposals",
       ])
         this.db.run(`DELETE FROM ${table} WHERE profile_id=?`, this.profileId);
       this.saveSettings(settingsSchema.parse({}));

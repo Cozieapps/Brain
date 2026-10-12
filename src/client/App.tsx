@@ -40,6 +40,12 @@ import {
 } from "lucide-react";
 import { api, ApiError } from "./api";
 import {
+  ConversationStep,
+  KeepingTrack,
+  PendingSuggestion,
+} from "./Continuity";
+import type { Thread } from "../shared/continuity";
+import {
   labels,
   type RecordItem,
   type Settings,
@@ -97,9 +103,9 @@ export function App() {
     [query, setQuery] = useState(""),
     [searchResults, setSearchResults] = useState<RecordItem[] | null>(null),
     [result, setResult] = useState<any>(null),
-    [proposal, setProposal] = useState<any>(null),
     [returning, setReturning] = useState(false);
   const seen = useRef(new Set<string>());
+  const messagesRef = useRef<HTMLDivElement>(null);
   const first = useRef(true);
   async function refresh() {
     try {
@@ -141,6 +147,11 @@ export function App() {
     const id = setTimeout(() => setToast(""), 4500);
     return () => clearTimeout(id);
   }, [toast]);
+  const latestMessageId = state?.messages?.at(-1)?.id;
+  useEffect(() => {
+    const node = messagesRef.current;
+    if (node) node.scrollTop = node.scrollHeight;
+  }, [latestMessageId, view]);
   async function action(fn: () => Promise<any>) {
     setError("");
     setBusy(true);
@@ -187,6 +198,19 @@ export function App() {
     } else if (type === "resume") {
       setView("companion");
       setResult(await tool("checkpoint.resume", {}));
+    } else if (
+      [
+        "start",
+        "capture",
+        "checkpoint",
+        "person",
+        "handoff",
+        "pause",
+        "transition",
+      ].includes(type)
+    ) {
+      setView("companion");
+      await tool("conversation.begin", { flow: type });
     } else setModal({ type });
   }
   function nav(v: View) {
@@ -296,6 +320,16 @@ export function App() {
       </Gate>
     );
   const next = state.recommendation as RecordItem | null;
+  const currentThread = (
+    state.continuity?.threads as Thread[] | undefined
+  )?.find((t) => t.status === "active");
+  const followup = state.continuity?.notifications?.[0];
+  const parkedThread = (
+    state.continuity?.threads as Thread[] | undefined
+  )?.find((t) => t.status === "paused");
+  const focusTask: RecordItem | undefined =
+    next ??
+    state.continuity?.items?.find((x: any) => x.record.kind === "task")?.record;
   const held = records.find((r) => r.kind === "checkpoint");
   const appointment = records
     .filter(
@@ -454,41 +488,91 @@ export function App() {
                     : "A little less to carry."}
                 </h1>
                 <p className="intro">
-                  Start where you are. We’ll take one thing at a time.
+                  {currentThread
+                    ? "We can pick up exactly where you left off."
+                    : active.length
+                      ? "Your threads are still here. We can move one thing forward."
+                      : "Tell me what’s on your mind. We can keep the thread together."}
                 </p>
-                <div className="welcome-card">
-                  <div>
-                    <div className="tiny-label">RIGHT HERE, WITH YOU</div>
-                    <h2>
-                      {next
-                        ? "One small place to begin."
-                        : "What would make today a little easier?"}
-                    </h2>
-                    <p>
-                      {next
-                        ? next.title
-                        : "A tangled thought. A task you can’t start. Something you don’t want to forget. There’s room for it here."}
-                    </p>
-                    <button
-                      className="primary"
-                      onClick={() =>
-                        next
-                          ? setModal({ type: "detail", record: next })
-                          : setModal({ type: "start" })
-                      }
-                    >
-                      {next ? "Take this one step" : "Let’s find a first step"}
-                      <ArrowUpRight size={17} />
-                    </button>
+                {!currentThread && (
+                  <div className="welcome-card">
+                    <div>
+                      <div className="tiny-label">
+                        {followup
+                          ? "A FOLLOW-UP IS READY"
+                          : "ONE THING AT A TIME"}
+                      </div>
+                      <h2>
+                        {followup
+                          ? followup.title
+                          : parkedThread
+                            ? "We left a thread here."
+                            : next
+                              ? "One small place to begin."
+                              : focusTask
+                                ? "Your place is still here."
+                                : "What would make today a little easier?"}
+                      </h2>
+                      <p>
+                        {followup
+                          ? followup.body
+                          : parkedThread
+                            ? `${parkedThread.data.title || "Our saved conversation"}. ${parkedThread.question?.prompt}`
+                            : next
+                              ? `${next.title} · ${next.data.nextAction}`
+                              : focusTask
+                                ? focusTask.status === "waiting"
+                                  ? `${focusTask.title}: we're waiting on ${focusTask.data.waitingOn || "an update"}. The details and your next check are saved below.`
+                                  : `${focusTask.title}. ${focusTask.data.nextAction}`
+                                : "A tangled thought. A task you can’t start. Something you don’t want to forget. There’s room for it here."}
+                      </p>
+                      <button
+                        className="primary"
+                        onClick={() =>
+                          followup
+                            ? (() => {
+                                const r = records.find(
+                                  (r) => r.id === followup.record_id,
+                                );
+                                if (r?.kind === "task")
+                                  void tool("conversation.begin", {
+                                    flow: "followup",
+                                    recordId: r.id,
+                                  });
+                                else if (r)
+                                  setModal({ type: "detail", record: r });
+                              })()
+                            : parkedThread
+                              ? void tool("conversation.resume", {
+                                  id: parkedThread.id,
+                                })
+                              : focusTask
+                                ? void tool("conversation.begin", {
+                                    flow: "followup",
+                                    recordId: focusTask.id,
+                                  })
+                                : void openWorkflow("start")
+                        }
+                      >
+                        {followup
+                          ? "Pick up this follow-up"
+                          : parkedThread
+                            ? "Pick up where we left off"
+                            : focusTask
+                              ? "Take this one step"
+                              : "Let’s find a first step"}
+                        <ArrowUpRight size={17} />
+                      </button>
+                    </div>
+                    <StillLife />
                   </div>
-                  <StillLife />
-                </div>
+                )}
                 <div className="quick-actions">
                   <button onClick={() => void openWorkflow("start")}>
                     <Sparkles size={18} />
                     <span>I’m stuck</span>
                   </button>
-                  <button onClick={() => setModal({ type: "capture" })}>
+                  <button onClick={() => void openWorkflow("capture")}>
                     <Bookmark size={18} />
                     <span>Hold this</span>
                   </button>
@@ -534,6 +618,9 @@ export function App() {
                 </div>
                 <div
                   className="messages"
+                  ref={messagesRef}
+                  role="log"
+                  tabIndex={0}
                   aria-live="polite"
                   aria-label="Conversation"
                 >
@@ -543,8 +630,9 @@ export function App() {
                       <div>
                         <strong>Beside</strong>
                         <p>
-                          You can put something down here, even if it’s
-                          unfinished. What’s on your mind?
+                          {settings.mode === "none"
+                            ? "Put down a thought, or choose what you need help carrying. I'll keep your place and ask for one detail at a time. Guided mode is on; open-ended AI conversation needs an AI connection in Preferences."
+                            : "What would you like help carrying? I can use what you have already shared and keep the next step with it."}
                         </p>
                         <small>Guided help · saved in your private space</small>
                       </div>
@@ -566,7 +654,7 @@ export function App() {
                           {m.action === "start" && (
                             <button
                               className="small-button"
-                              onClick={() => setModal({ type: "start" })}
+                              onClick={() => void openWorkflow("start")}
                             >
                               Find a first step
                             </button>
@@ -616,45 +704,48 @@ export function App() {
                       ))}
                     </div>
                   )}
-                {proposal && (
-                  <div className="result-panel">
-                    <strong>Review a proposed action</strong>
-                    <p>
-                      Nothing has been changed. Check the exact fields before
-                      applying.
-                    </p>
-                    <pre>{JSON.stringify(proposal, null, 2)}</pre>
-                    <button
-                      className="primary"
-                      onClick={async () => {
-                        if (await tool(proposal.name, proposal.input))
-                          setProposal(null);
-                      }}
-                    >
-                      Apply this action
-                    </button>
-                    <button onClick={() => setProposal(null)}>Dismiss</button>
-                  </div>
+                {state.proposals?.map((p: any) => (
+                  <PendingSuggestion
+                    key={p.id}
+                    proposal={p}
+                    busy={busy}
+                    tool={tool}
+                    records={records}
+                  />
+                ))}
+                {currentThread ? (
+                  <ConversationStep
+                    thread={currentThread}
+                    busy={busy}
+                    tool={tool}
+                  />
+                ) : (
+                  <Composer
+                    busy={busy}
+                    mode={settings.mode}
+                    onSend={async (message) => {
+                      const r = await action(() => api("/chat", { message }));
+                      if (r) {
+                        setResult(r);
+                      }
+                      return !!r;
+                    }}
+                    onFile={upload}
+                    onError={setError}
+                  />
                 )}
-                <Composer
-                  busy={busy}
-                  mode={settings.mode}
-                  onSend={async (message) => {
-                    const r = await action(() => api("/chat", { message }));
-                    if (r) {
-                      setResult(r);
-                      setProposal(r.proposal ?? null);
-                    }
-                    return !!r;
-                  }}
-                  onFile={upload}
-                  onError={setError}
-                />
                 <p className="composer-note">
                   {settings.mode === "none"
                     ? "No-AI mode uses saved notes and guided steps. Free-form AI conversation is off."
                     : "AI can be mistaken. Suggestions stay suggestions until you choose to act."}
                 </p>
+                <KeepingTrack
+                  data={state.continuity}
+                  timezone={settings.timezone}
+                  tool={tool}
+                  busy={busy}
+                  open={(r) => setModal({ type: "detail", record: r })}
+                />
               </section>
               <aside className="context-area">
                 <div className="context-heading">
@@ -1181,10 +1272,16 @@ export function App() {
                   <button
                     key={workflow}
                     onClick={() =>
-                      setModal({
-                        type: "task",
-                        record: { data: { workflow } } as unknown as RecordItem,
-                      })
+                      view === "companion"
+                        ? void tool("conversation.begin", {
+                            flow: workflow === "general" ? "start" : workflow,
+                          })
+                        : setModal({
+                            type: "task",
+                            record: {
+                              data: { workflow },
+                            } as unknown as RecordItem,
+                          })
                     }
                   >
                     <span>{title}</span>
@@ -2579,7 +2676,7 @@ function Detail({
           onClick={() => {
             if (
               confirm(
-                "Forget this item? Its search and event history will be removed. Conversation history is also cleared so it cannot retain copies. This cannot be undone.",
+                "Forget this item? Its search and event history will be removed. Conversation history, unfinished conversations, and pending suggestions are also cleared so they cannot retain copies. This cannot be undone.",
               )
             )
               void tool("record.delete", { id: r.id, confirm: true });
@@ -3174,10 +3271,11 @@ function SettingsView({
         <p className="help-text">
           Exports contain your private content and attachments, never provider
           credentials. Forgetting an item removes it from search, event history,
-          and future AI context; conversation history is also cleared to remove
-          copies. Downloaded exports and any operator-created backups are
-          outside the app’s control. Cloudflare may retain storage history for
-          its configured recovery period; see the deployment privacy guide.
+          and future AI context; conversation history, unfinished conversations,
+          and pending suggestions are also cleared to remove copies. Downloaded
+          exports and any operator-created backups are outside the app’s
+          control. Cloudflare may retain storage history for its configured
+          recovery period; see the deployment privacy guide.
         </p>
         <details className="delete-section">
           <summary>Delete everything in this profile</summary>

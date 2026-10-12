@@ -63,6 +63,14 @@ The user approved publishing the application source to `Cozieapps/Brain` on `mai
 
 The UI, guided flows and reviewed AI proposals use the same schema-validated tool registry. Models have no shell, computer control, or external-sending tools. AI responses do not directly execute mutations; proposals are reviewed as concrete typed actions. Memory is retrieved before inference and distinguishes user statements, suggestions and inferences. No full-history or embedding calls.
 
+## Continuity between conversations
+
+Start from the companion's quick actions or “A few more ways I can help.” Guided conversations ask for one detail at a time and save each answer. Closing the page or restarting the server preserves the next question. “Save this spot” lets you change topics; “Keeping track for you” brings the unfinished conversation back. You can correct your last answer before carrying on.
+
+Returns, appointment requests, and applications create an ongoing responsibility and a linked, unsent draft. “Pick this up” continues that same item: record your actual submission, name the waiting party, and later supply outcome evidence. A persisted waiting update schedules a check after three days, subject to reminder preferences. The companion shows due follow-ups, saved drafts, scheduled checks, and actual activity in its main view. It cannot independently inspect a shop's reply or bank refund.
+
+When AI is enabled, requests include bounded relevant saved records, ongoing responsibilities, and checkpoints. The model can suggest starting or continuing these conversations. Suggestions survive reloads, require a concrete review, and can be applied only once. Routine guided progress and reminders make no model requests. This does not add Dot's computer, connected apps, or proprietary runtime.
+
 ## Notifications, files and privacy
 
 - Durable jobs are persisted, deduplicated, leased, retried at most three times, cancellable and reconciled on restart. Unread reminders suppress duplicate nudges; capacity, quiet hours, monitoring choices, pause, urgency exceptions and daily budgets apply.

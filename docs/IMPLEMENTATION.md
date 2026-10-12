@@ -15,6 +15,16 @@ User goal: implement all ten workflows as one continuous companion, with fully f
 - [x] Migrations, typecheck, production build, 36 automated tests, 4 browser/accessibility tests, real local Cloudflare runtime and restart/alarm checks.
 - [x] Setup, Cloudflare, ChatGPT/self-hosting, privacy and verification guides; new MIT license (no existing license was changed).
 
+Continuity revision, requested after the user compared the original experience with Dot/Muse and selected “It remembers context and carries work forward”:
+
+- [x] Persistent one-question conversations, saved answers, back/correction, pause/resume, separate topic threads, optimistic concurrency, and version-three migration preserving existing data.
+- [x] Carry returns, appointment requests, and applications into linked drafts, actual user submission, waiting follow-ups, and evidence-based closure of the same responsibility.
+- [x] Main-view continuity: relevant opening prompt, parked conversations, ongoing work, drafts, next checks, real event history, and due follow-ups.
+- [x] AI context includes bounded relevant records, ongoing responsibilities, and saved checkpoints. Reviewed suggestions can start or continue a workflow, survive reload, and apply once. No increase in background model calls or external permissions.
+- [x] 57 automated tests, 6 browser/accessibility tests, build/typecheck, migration upgrade checks, and an actual local Cloudflare restart with an unfinished conversation.
+
+This revision improves continuity and guided execution. It does not implement Dot's cloud computer, a general autonomous reasoning loop, live external connectors, or hosted ChatGPT-plan approval. Natural-language AI still requires a configured and explicitly enabled provider.
+
 Remaining external steps, not implementation claims:
 
 1. User approved committing and pushing the source to `Cozieapps/Brain` on `main`. Verify the remote branch before starting a connected Cloudflare build; source publication does not itself authorize a public deployment.

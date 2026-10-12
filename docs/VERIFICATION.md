@@ -5,21 +5,24 @@ Executed in this workspace on 2026-10-12 with Node 24.19.0, TypeScript, SQLite, 
 ## Passed
 
 - `npm ci --cache /workspace/.npm-cache`: repeatable installation from the lockfile, with verification left enabled.
-- `npm run migrate`: migrations 1 and 2 applied. Repeating it reported the same versions without changing existing records.
+- `npm run migrate`: migrations 1, 2, and 3 applied. Repeating it reported the same versions without changing existing records. The upgrade from a populated version-two database is also tested.
 - `npm run typecheck`: passed.
-- `npm test`: **36 passed, 0 failed, 0 skipped** (27 domain/HTTP/privacy tests, 9 provider/OAuth tests).
+- `npm test`: **57 passed, 0 failed, 0 skipped** (27 domain/HTTP/privacy tests, 9 provider/OAuth tests, 21 continuity tests).
 - `npm run build`: production React assets built successfully. Vite reports upstream Zod pure-comment annotation notices; these do not fail the build. Vendor chunks separate React, validation and Temporal.
-- `npm run test:browser`: **4 passed, 0 failed, 0 skipped** using real Chromium. Desktop capture → task → checkpoint → reload → resume, mobile guided start/capacity and all ten choices, return evidence and revoked edit permission, WCAG A/AA axe checks at 1280px and 390px. Keyboard modal escape/focus and absence of horizontal overflow are checked. No external browser requests occur on fresh No-AI use.
+- `npm run test:browser`: **6 passed, 0 failed, 0 skipped** using real Chromium. Desktop capture → task → checkpoint → reload → resume, mobile guided start/capacity and all ten choices, return evidence and revoked edit permission, WCAG A/AA axe checks at 1280px and 390px. Additional browser paths carry a conversational return across reloads through submission, waiting, and confirmation, and pause/resume/correct a saved conversation. Keyboard access is checked on populated conversations as well as the empty home. No external browser requests occur on fresh No-AI use.
 - `npm audit --omit=dev`: zero reported production dependency vulnerabilities at the time checked.
 - `wrangler deploy --dry-run`: successful production bundle; `wrangler deploy --dry-run --env preview`: successful isolated preview bundle. Neither command publishes.
 - Cloudflare local workerd runtime on port 8787: unauthenticated API returned 401; passphrase login returned 200; a real Chromium browser accepted the secure session and used the React UI; checkpoint create/read/resume returned 200; SQLite state survived a runtime restart; one due Durable Object alarm produced exactly one inbox notification; worker heartbeat was current; plan mode remained unavailable on this hosted target. Synthetic content was then deleted.
 - Node application starts on loopback port 3000 with an empty personal content database and the reminder worker running.
+- Continuity revision: a local Cloudflare Worker restart retained an unfinished return conversation's title and next question. Continuing produced one responsibility and its linked unsent draft. The existing persisted checkpoint, one deduplicated alarm, authentication, and hosted-plan gate continued working after migration 3.
 
 ## Acceptance coverage
 
 Each workflow has a realistic success/recovery test in `tests/workflows.test.ts`. The suite exercises obstacle-specific starts/helpful memory, actual persisted checkpoint restoration after database close/reopen, returns/appointments/forms with evidence, dependency and deadline ranking, override/rest, DST-aware transitions, comeback/repair/drop, grounded delayed replies, accepted responsibility handoffs, user-controlled pauses, and capacity-dependent reminder load.
 
 Additional tests cover lease recovery and deduplication across worker instances, quiet hours, temporary pause, time-zone changes, overdue recovery budget, optimistic versions, cyclic/dropped dependencies, profile isolation, forgotten/expired memory retrieval, full conversation export, forgetting during active inference, calendar UID deduplication and IANA time zones, untrusted attachments, CSRF/DNS rebinding, TLS/auth requirements, logout revocation, quota failures and continued No-AI availability.
+
+`tests/continuity.test.ts` covers version-two upgrades, unfinished conversations surviving a database close/reopen, typed guided paths, correction and topic switches, duplicate answer rejection, pinned time zones and DST ambiguity, concurrent task edits, closed-task conversations, profile isolation, revoked permissions, privacy deletion of draft context and proposals, zero-provider-request No-AI progress, and persisted AI workflow suggestions applied only once. AI continuity is tested with a mock stream; it does not establish live provider eligibility.
 
 Provider tests use mocks and test-generated keys. They verify PKCE/state/nonce, issued client handling, callback expiry/browser binding, identity audience/issuer/expiry checks, missing plan scopes, account separation, token rotation/serialized refresh, owner-only credential files, cancelled account-switch requests, separate plan/API payloads, terminal stream validation, split UTF-8/CRLF events and post-start quota failure. The code uses maintained `jose` verification rather than accepting decoded unsigned identity claims.
 
@@ -34,6 +37,7 @@ Provider tests use mocks and test-generated keys. They verify PKCE/state/nonce, 
 - Exports include full conversation history, beyond the bounded UI/model context window.
 - SSE CRLF separators spanning network chunks are normalized correctly.
 - Secondary text contrast was strengthened; both tested home layouts pass axe's WCAG A/AA checks.
+- A long conversation initially lacked keyboard access to its scrolling region; it now has a focusable conversation log. Reloads show the latest messages, and the opening prompt uses an actual waiting item or saved conversation instead of the empty greeting.
 
 ## Not verified / intentionally unavailable
 

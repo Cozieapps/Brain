@@ -59,6 +59,57 @@ if (phase === "create") {
 } else if (phase === "clean") {
   await call("/delete-all", { confirm: "DELETE" });
   console.log("Synthetic test content removed.");
+} else if (phase === "conversation-create") {
+  await call("/tool", {
+    name: "conversation.begin",
+    input: { flow: "return" },
+  });
+  const state = await call("/state");
+  const t = state.continuity.threads.find((t) => t.status === "active");
+  await call("/tool", {
+    name: "conversation.answer",
+    input: {
+      id: t.id,
+      version: t.version,
+      value: "Synthetic continuity return",
+    },
+  });
+  console.log(
+    "Saved the first answer. Restart the local Worker, then run conversation-verify.",
+  );
+} else if (phase === "conversation-verify") {
+  let state = await call("/state");
+  let t = state.continuity.threads.find((t) => t.status === "active");
+  if (
+    t?.data.title !== "Synthetic continuity return" ||
+    t.question.key !== "references"
+  )
+    throw Error("Interrupted conversation was not restored");
+  await call("/tool", {
+    name: "conversation.answer",
+    input: { id: t.id, version: t.version, value: "Synthetic order 123" },
+  });
+  state = await call("/state");
+  t = state.continuity.threads.find((t) => t.status === "active");
+  await call("/tool", {
+    name: "conversation.answer",
+    input: { id: t.id, version: t.version, value: "__skip__" },
+  });
+  state = await call("/state");
+  const task = state.records.find(
+    (r) => r.kind === "task" && r.title === "Synthetic continuity return",
+  );
+  if (
+    !task ||
+    task.status !== "prepared" ||
+    !state.records.some((r) => r.kind === "draft" && r.data.taskId === task.id)
+  )
+    throw Error(
+      "Conversation did not carry through to a responsibility and draft",
+    );
+  console.log(
+    "Worker restart retained the question and answers; continuing created one responsibility and linked draft.",
+  );
 } else {
   const state = await call("/state");
   const result = await call("/tool", { name: "checkpoint.resume", input: {} });
