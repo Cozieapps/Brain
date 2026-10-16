@@ -4,7 +4,11 @@ A private, practical ADHD companion: one conversation, ten connected workflows, 
 
 **No credentials are needed for local No-AI use.** Real data starts empty. No demo data is inserted. The application does not diagnose, adjust medication, monitor relationships, or send anything externally.
 
-## On-device voice companion (no internet)
+## Android app (native APK)
+
+`android/` is a native Kotlin app for the Galaxy Tab: you type and Beside answers out loud, with the language model (llama.cpp: Qwen 3.5, Qwen 3, Gemma 4) and a natural neural voice (Kokoro) running on the tablet. Reminders ring even when the app is closed, and it can hand drafts to WhatsApp, Calendar and Clock. See [the Android guide](docs/ANDROID.md) for installing the APK, model choice and what's verified.
+
+## On-device voice companion in the browser (no internet)
 
 `/offline.html` is a separate, fully on-device app for tablets: you type, and it answers out loud with a natural neural voice (Kokoro). It runs Gemma 4 or Qwen 3.5/3 in the browser, has ADHD tools (tasks with tiny steps, focus timer with spoken check-ins, reminders, energy check-ins, brain dump), and works with Wi-Fi off after a one-time download. See [the on-device guide](docs/OFFLINE.md), including which model suits a Galaxy Tab S9 FE.
 

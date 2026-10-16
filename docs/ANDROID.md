@@ -64,11 +64,27 @@ Needs JDK 21+, Android SDK 36 and NDK 28.2.13676358 (`sdkmanager "ndk;28.2.13676
 
 ## What's verified and what isn't
 
-- **Verified in CI:**
-  - The C++ engine (`android/native-test`) loads and answers with real Qwen 3.5 0.8B, Gemma 4 E2B and Qwen 3 4B Instruct models.
-  - Thinking stays off, a replayed chat is remembered, and the saved system prompt reloads.
-  - Every catalog file name and byte size matches Hugging Face.
-  - The Kokoro archive's layout and speaker IDs are correct, and test sentences are generated.
-  - Unit tests and the release APK build pass.
-- **Verified locally:** the release APK builds, the unit tests pass, and the UI renders at the Tab S9 FE's resolution (screenshot tests).
-- **Not verified:** running on a real Galaxy Tab. No device was available, so on-tablet speed, memory use and audio playback still need a first try. Each reply shows tokens per second and time to the first word, so you can compare models.
+**Verified in CI** on every push (`.github/workflows/android.yml`):
+- The C++ engine (`android/native-test`) loads real Qwen 3.5 0.8B, Gemma 4 E2B and Qwen 3 4B Instruct models and answers. It also:
+  - uses the `<action>` tool format;
+  - remembers earlier turns and a replayed chat;
+  - restores the saved system prompt from disk.
+- A follow-up turn only processes its own ~20 tokens and never re-sends the conversation.
+- On the CI machine (x86, 4 cores, not the tablet): 0.8B ran at 35–39 tok/s, Gemma 4 E2B at 16–17 tok/s, Qwen 3 4B at 9–11 tok/s.
+- The chat formatter adds each turn exactly once with the real Qwen 3.5, Qwen 3, Gemma 4 and Gemma 2 templates.
+- All six catalog files exist on Hugging Face with the exact byte sizes the app expects.
+- The Kokoro archives unpack to the expected files with 54 speakers (Heart = 3, Bella = 2, Emma = 21). Voice render speed on two CPU threads:
+  - full precision: 0.56 s per second of speech;
+  - int8: 1.28 s, which is too slow to keep up (that's why the app uses full precision).
+- Kotlin unit tests (text cleanup, sentence chunking, tools including duplicate protection, prompt, catalog) pass, and the signed release APK builds.
+
+**Verified locally:**
+- The release APK contains libbeside.so with the llama.cpp ARM dot-product kernels, and it's signed.
+- Every Kotlin `external` function matches its JNI signature.
+- The screens render correctly at the Tab S9 FE's 2304 × 1440 (`app/src/test/snapshots`).
+
+**Not verified:** running on a real Galaxy Tab. No device was available, so speed, memory use and audio playback on the tablet still need a first try. Expect:
+- the very first start of a model to take around half a minute (it reads its instructions once, then saves them);
+- 4B models to be noticeably slower than 2B ones.
+
+Each reply shows its tokens per second and time to first word, and Settings → Voice shows how fast the voice renders on the tablet.

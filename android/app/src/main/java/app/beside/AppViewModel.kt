@@ -114,7 +114,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         override fun draftMessage(text: String, app: String) = handoffs.message(text, app)
         override fun setAlarm(hour: Int, minute: Int, label: String) = handoffs.alarm(hour, minute, label)
     }
-    private val tools = ToolRunner(store::update, effects)
+    private val tools = ToolRunner(store::update, effects, read = { store.data.value })
 
     init {
         viewModelScope.launch {
@@ -177,7 +177,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             try {
                 if (!files.isVoiceReady()) {
                     _voice.value = LoadState.Working("Downloading the natural voice")
-                    files.downloadVoice { d, t -> _voice.value = LoadState.Working("Downloading the natural voice", d, t) }
+                    files.downloadVoice(
+                        onProgress = { d, t -> _voice.value = LoadState.Working("Downloading the natural voice", d, t) },
+                        onUnpacking = { _voice.value = LoadState.Working("Unpacking the voice… about a minute") },
+                    )
                     _filesVersion.value++
                 }
                 loadVoice()

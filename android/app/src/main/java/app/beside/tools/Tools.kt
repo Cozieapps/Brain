@@ -43,6 +43,7 @@ const val TOOL_GUIDE = """Tools (use one only when she clearly wants it; at most
 - add_calendar_event {"title": string, "day"?: "today"|"tomorrow"|"YYYY-MM-DD", "time": "HH:MM", "minutes"?: number}  opens her calendar to save it
 - draft_message {"text": string, "app"?: "whatsapp"|"sms"|"any"}  opens the app with the message written; she picks who and taps send
 - set_alarm {"time": "HH:MM", "label"?: string}  sets an alarm in the Clock app
+Only act on what her latest message asks for. Never repeat an action you already did (it's done), and don't create tasks she didn't ask for.
 To use a tool, end your reply with one block per action, exactly like:
 <action>{"tool": "add_task", "args": {"title": "Email Sam about Friday", "steps": ["Open email", "Write two lines"]}}</action>
 Say what you did in plain words first. Never claim you did something without the block. You cannot send messages yourself: she always taps send."""
@@ -93,9 +94,12 @@ private val dayFormat = DateTimeFormatter.ofPattern("EEE d MMM", Locale.getDefau
 class ToolRunner(
     private val update: ((AppData) -> AppData) -> AppData,
     private val effects: Effects,
+    private val read: () -> AppData = { update { it } },
     private val zone: ZoneId = ZoneId.systemDefault(),
     private val clock: () -> LocalDateTime = { LocalDateTime.now(zone) },
 ) {
+    private fun current(): AppData = read()
+
     fun run(action: ParsedAction): ActionResult {
         val a = action.args
         fun fail(summary: String) = ActionResult(action.tool, false, summary)
@@ -104,6 +108,10 @@ class ToolRunner(
         return when (action.tool) {
             "add_task" -> {
                 val title = a.str("title").ifEmpty { return fail("Couldn't add a task without a name.") }
+                // Models sometimes repeat an action when asked about it; don't make duplicates.
+                current().openTasks.firstOrNull { it.title.equals(title, ignoreCase = true) }?.let {
+                    return ok("“${it.title}” is already on your list")
+                }
                 val task = Task(title = title, steps = a.strList("steps").map { Step(it) }, whenText = a.str("when").ifEmpty { null })
                 update { it.copy(tasks = it.tasks + task) }
                 val steps = if (task.steps.isNotEmpty()) " with ${task.steps.size} small steps" else ""
@@ -143,6 +151,9 @@ class ToolRunner(
                 val text = a.str("text")
                 val at = resolveWhen(a.num("minutes"), a.str("time").ifEmpty { null }, now)
                 if (text.isEmpty() || at == null) return fail("Couldn't tell when to remind you.")
+                val atMs = at.atZone(zone).toInstant().toEpochMilli()
+                current().reminders.firstOrNull { !it.fired && it.text.equals(text, ignoreCase = true) && kotlin.math.abs(it.at - atMs) < 5 * 60_000 }
+                    ?.let { return ok("Already reminding you at ${at.format(clockFormat)}: $text") }
                 val reminder = Reminder(text = text, at = at.atZone(zone).toInstant().toEpochMilli())
                 update { it.copy(reminders = it.reminders + reminder) }
                 effects.scheduleReminder(reminder)
@@ -157,6 +168,7 @@ class ToolRunner(
             }
             "save_note" -> {
                 val text = a.str("text").ifEmpty { return fail("Nothing to save.") }
+                if (current().notes.any { it.text.equals(text, ignoreCase = true) }) return ok("Already in your notes")
                 val note = Note(text = text)
                 update { it.copy(notes = it.notes + note) }
                 ok("Saved to notes: ${if (text.length > 60) text.take(57) + "…" else text}", Undo("note", note.id))

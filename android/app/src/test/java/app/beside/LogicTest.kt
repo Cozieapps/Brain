@@ -193,6 +193,15 @@ class ToolsTest {
         assertTrue(tools.run(ParsedAction("set_alarm", jsonArgs("time" to "7:30am"))).ok)
         assertEquals("alarm 7:30", fx.calls.last())
         assertFalse(tools.run(ParsedAction("start_timer", jsonArgs("minutes" to 500))).ok)
+
+        // A repeated action (models do this when asked "what did you add?") makes no duplicate.
+        tools.run(ParsedAction("add_task", jsonArgs("title" to "Do the laundry")))
+        val again = tools.run(ParsedAction("add_task", jsonArgs("title" to "do the laundry")))
+        assertTrue(again.ok && again.undo == null)
+        assertEquals(1, data.tasks.count { it.title.equals("do the laundry", ignoreCase = true) })
+        tools.run(ParsedAction("set_reminder", jsonArgs("text" to "Stretch", "minutes" to 20)))
+        tools.run(ParsedAction("set_reminder", jsonArgs("text" to "stretch", "minutes" to 21)))
+        assertEquals(1, data.reminders.size)
         assertFalse(tools.run(ParsedAction("hack_the_planet", jsonArgs())).ok)
     }
 }

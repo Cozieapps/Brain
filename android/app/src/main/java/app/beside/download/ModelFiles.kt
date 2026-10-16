@@ -44,9 +44,10 @@ class ModelFiles(private val context: Context) {
     suspend fun downloadModel(m: ModelChoice, onProgress: (Long, Long) -> Unit) =
         download(m.url, modelFile(m), m.bytes, onProgress)
 
-    suspend fun downloadVoice(onProgress: (Long, Long) -> Unit) = withContext(Dispatchers.IO) {
+    suspend fun downloadVoice(onProgress: (Long, Long) -> Unit, onUnpacking: () -> Unit) = withContext(Dispatchers.IO) {
         val archive = File(dir, "kokoro.tar.bz2")
         download(KokoroModel.URL, archive, KokoroModel.BYTES, onProgress)
+        onUnpacking()
         val tmp = File(dir, "kokoro-extracting").apply { deleteRecursively(); mkdirs() }
         archive.inputStream().use { extractTarBz2(it, tmp) }
         val extracted = File(tmp, KokoroModel.DIR).takeIf { it.isDirectory } ?: tmp
