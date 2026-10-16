@@ -43,8 +43,9 @@ class Engine {
     std::string describe() const;
 
     // Starts a fresh conversation with this system prompt and keeps a snapshot of the
-    // processed prompt, so later resets are instant.
-    std::string set_system(const std::string & system);
+    // processed prompt, so later resets are instant. With a cache path, the snapshot is also
+    // saved to disk and reused on the next launch instead of re-reading the prompt.
+    std::string set_system(const std::string & system, const std::string & cache_path = "");
     // Back to just the system prompt (for a new chat or before replaying an old one).
     std::string reset_to_system();
     // Adds an earlier turn without generating (replaying a saved chat).
@@ -60,6 +61,8 @@ class Engine {
     int history_size() const { return (int) history_.size(); }
 
   private:
+    std::string render(const std::vector<Message> & msgs, bool add_generation_prompt);
+    std::string system_prefix(const std::string & system);
     std::string format_delta(const Message & msg, bool add_generation_prompt);
     std::string decode_text(const std::string & text, bool first, bool want_logits);
 
@@ -70,6 +73,7 @@ class Engine {
     common_batch * batch_ = nullptr;
     std::vector<Message> history_;
     std::vector<uint8_t> system_state_;
+    std::string system_text_;  // exactly what the system snapshot contains
     int system_n_past_ = 0;
     int n_past_ = 0;
     int n_batch_ = 256;

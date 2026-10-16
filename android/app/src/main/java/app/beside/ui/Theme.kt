@@ -1,6 +1,7 @@
 package app.beside.ui
 
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
@@ -90,6 +91,9 @@ fun BesideTheme(theme: String = "system", textScale: Float = 1f, content: @Compo
         labelSmall = base.labelSmall.copy(fontWeight = FontWeight.SemiBold, letterSpacing = 0.8.sp).s(),
     )
     CompositionLocalProvider(LocalPalette provides p) {
-        MaterialTheme(colorScheme = scheme, typography = type, content = content)
+        MaterialTheme(colorScheme = scheme, typography = type) {
+            // Text outside a Surface would otherwise default to black, unreadable in dark mode.
+            CompositionLocalProvider(LocalContentColor provides p.text, content = content)
+        }
     }
 }

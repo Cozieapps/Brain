@@ -36,6 +36,7 @@ class ModelFiles(private val context: Context) {
     fun delete(m: ModelChoice) {
         modelFile(m).delete()
         File(modelFile(m).path + ".part").delete()
+        File(modelFile(m).path + ".system-cache").delete()
     }
 
     fun freeBytes(): Long = dir.usableSpace

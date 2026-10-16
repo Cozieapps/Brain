@@ -80,6 +80,7 @@ private val timeFormat = DateTimeFormatter.ofPattern("h:mm a")
 
 private fun clock(ms: Long) = Instant.ofEpochMilli(ms).atZone(ZoneId.systemDefault()).toLocalTime().format(timeFormat)
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun TodayPanel(state: UiState, actions: UiActions, onClose: () -> Unit, onAsked: () -> Unit = {}) {
     val c = Beside.colors
@@ -105,8 +106,8 @@ fun TodayPanel(state: UiState, actions: UiActions, onClose: () -> Unit, onAsked:
                 Eyebrow("One thing now", Icons.Outlined.AutoAwesome)
                 Text(focus.title, style = MaterialTheme.typography.titleMedium)
                 focus.steps.firstOrNull { !it.done }?.let { Text("Next: ${it.text}", style = MaterialTheme.typography.bodyMedium) }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    PrimaryButton("10 minutes on this", { actions.startTimer(10, focus.title) }, Icons.Outlined.PlayArrow)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    PrimaryButton("10 min on this", { actions.startTimer(10, focus.title) }, Icons.Outlined.PlayArrow)
                     QuietButton("Help me start", { ask("Help me start: ${focus.title}") })
                 }
             }

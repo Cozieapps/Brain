@@ -50,7 +50,7 @@ fun MessageView(m: Message, onSpeak: () -> Unit, onUndo: (Int) -> Unit) {
             Surface(
                 shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp, bottomStart = 20.dp, bottomEnd = 6.dp),
                 color = c.user, modifier = Modifier.widthIn(max = 560.dp),
-            ) { Text(m.content, Modifier.padding(horizontal = 16.dp, vertical = 10.dp), style = MaterialTheme.typography.bodyLarge) }
+            ) { Text(m.content, Modifier.padding(horizontal = 16.dp, vertical = 10.dp), color = c.text, style = MaterialTheme.typography.bodyLarge) }
         }
         return
     }

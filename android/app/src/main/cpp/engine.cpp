@@ -118,37 +118,56 @@ std::string Engine::describe() const {
 
 int Engine::n_ctx() const { return ctx_ ? (int) llama_n_ctx(ctx_) : 0; }
 
-// Text added to the prompt by one more message: the template applied to the history with
-// and without it. Thinking is switched off so Qwen answers straight away.
-std::string Engine::format_delta(const Message & msg, bool add_generation_prompt) {
+std::string Engine::render(const std::vector<Message> & msgs, bool add_generation_prompt) {
     common_chat_templates_inputs in;
     in.use_jinja = true;
-    in.enable_thinking = false;
+    in.enable_thinking = false;  // Qwen answers straight away instead of reasoning first
     in.chat_template_kwargs["enable_thinking"] = "false";
     in.add_bos = add_bos_;
     in.add_eos = add_eos_;
-
-    auto to_chat = [](const Message & m) {
+    in.add_generation_prompt = add_generation_prompt;
+    for (const auto & m : msgs) {
         common_chat_msg c;
         c.role = m.role;
         c.content = m.content;
-        return c;
-    };
-    std::string before;
-    if (!history_.empty()) {
-        for (const auto & m : history_) in.messages.push_back(to_chat(m));
-        in.add_generation_prompt = false;
-        before = common_chat_templates_apply(templates_, in).prompt.str();
+        in.messages.push_back(c);
     }
-    in.messages.push_back(to_chat(msg));
-    in.add_generation_prompt = add_generation_prompt;
-    std::string after = common_chat_templates_apply(templates_, in).prompt.str();
+    return common_chat_templates_apply(templates_, in).prompt.str();
+}
+
+// The text a conversation starts with, up to where the first user message's words go.
+// Some templates refuse a system prompt on its own (Qwen 3.5) or fold it into the first
+// user turn (older Gemma), so render two different first messages and keep what they share.
+std::string Engine::system_prefix(const std::string & system) {
+    const std::string a = render({{"system", system}, {"user", "\x01"}}, false);
+    const std::string b = render({{"system", system}, {"user", "\x02"}}, false);
+    size_t n = 0;
+    while (n < a.size() && n < b.size() && a[n] == b[n]) ++n;
+    return a.substr(0, n);
+}
+
+// Text added to the prompt by one more message: the history rendered with and without it.
+std::string Engine::format_delta(const Message & msg, bool add_generation_prompt) {
+    std::string before;
+    if (history_.size() <= 1) {
+        before = system_text_;  // only the system prompt is in memory
+    } else {
+        try {
+            before = render(history_, false);
+        } catch (const std::exception &) {
+            before.clear();
+        }
+    }
+    std::vector<Message> next = history_;
+    next.push_back(msg);
+    const std::string after = render(next, add_generation_prompt);
     std::string delta;
-    if (add_generation_prompt && !before.empty() && before.back() == '\n') delta = "\n";
-    if (after.size() >= before.size() && after.compare(0, before.size(), before) == 0)
+    // The generated reply ends at its end-of-turn token; the template adds a newline after it.
+    if (history_.size() > 1 && !before.empty() && before.back() == '\n') delta = "\n";
+    if (!before.empty() && after.compare(0, before.size(), before) == 0)
         delta += after.substr(before.size());
     else
-        delta += after;  // template rewrote earlier turns; append the new rendering
+        delta += after.substr(std::min(after.size(), system_text_.size()));
     return delta;
 }
 
@@ -172,19 +191,72 @@ std::string Engine::decode_text(const std::string & text, bool first, bool want_
     return "";
 }
 
-std::string Engine::set_system(const std::string & system) {
+namespace {
+// Cache file: magic, key length, key (model + context + prompt), token count, state bytes.
+constexpr uint32_t kCacheMagic = 0x42534431;  // "BSD1"
+
+bool read_cache(const std::string & path, const std::string & key, int & n_past, std::vector<uint8_t> & state) {
+    FILE * f = fopen(path.c_str(), "rb");
+    if (!f) return false;
+    uint32_t magic = 0, key_len = 0;
+    int32_t n = 0;
+    uint64_t size = 0;
+    bool ok = fread(&magic, 4, 1, f) == 1 && magic == kCacheMagic && fread(&key_len, 4, 1, f) == 1 && key_len == key.size();
+    std::string stored(key_len, '\0');
+    ok = ok && fread(stored.data(), 1, key_len, f) == key_len && stored == key && fread(&n, 4, 1, f) == 1 &&
+         fread(&size, 8, 1, f) == 1 && size > 0 && size < (1ull << 33);
+    if (ok) {
+        state.resize(size);
+        ok = fread(state.data(), 1, size, f) == size;
+    }
+    fclose(f);
+    if (ok) n_past = n;
+    return ok;
+}
+
+void write_cache(const std::string & path, const std::string & key, int n_past, const std::vector<uint8_t> & state) {
+    const std::string tmp = path + ".tmp";
+    FILE * f = fopen(tmp.c_str(), "wb");
+    if (!f) return;
+    const uint32_t key_len = (uint32_t) key.size();
+    const int32_t n = n_past;
+    const uint64_t size = state.size();
+    bool ok = fwrite(&kCacheMagic, 4, 1, f) == 1 && fwrite(&key_len, 4, 1, f) == 1 &&
+              fwrite(key.data(), 1, key_len, f) == key_len && fwrite(&n, 4, 1, f) == 1 && fwrite(&size, 8, 1, f) == 1 &&
+              fwrite(state.data(), 1, state.size(), f) == state.size();
+    ok = fclose(f) == 0 && ok;
+    if (ok) rename(tmp.c_str(), path.c_str());
+    else remove(tmp.c_str());
+}
+}  // namespace
+
+std::string Engine::set_system(const std::string & system, const std::string & cache_path) {
     if (!ctx_) return "No model is loaded.";
     llama_memory_clear(llama_get_memory(ctx_), true);
     history_.clear();
     n_past_ = 0;
     stop_.store(false);
-    Message msg{"system", system};
-    std::string err = decode_text(format_delta(msg, false), /*first=*/true, false);
+    try {
+        system_text_ = system_prefix(system);
+    } catch (const std::exception & e) {
+        return std::string("This model's chat template failed: ") + e.what();
+    }
+    const Message msg{"system", system};
+    const std::string key = describe() + "\n" + system_text_;
+    if (!cache_path.empty() && read_cache(cache_path, key, system_n_past_, system_state_) &&
+        llama_state_seq_set_data(ctx_, system_state_.data(), system_state_.size(), 0) != 0) {
+        n_past_ = system_n_past_;
+        history_.push_back(msg);
+        return "";
+    }
+    llama_memory_clear(llama_get_memory(ctx_), true);
+    std::string err = decode_text(system_text_, /*first=*/true, false);
     if (!err.empty()) return "Couldn't read the system prompt (" + err + ").";
     history_.push_back(msg);
     system_n_past_ = n_past_;
     system_state_.resize(llama_state_seq_get_size(ctx_, 0));
     llama_state_seq_get_data(ctx_, system_state_.data(), system_state_.size(), 0);
+    if (!cache_path.empty()) write_cache(cache_path, key, system_n_past_, system_state_);
     return "";
 }
 
@@ -202,7 +274,13 @@ std::string Engine::reset_to_system() {
 std::string Engine::append(const Message & msg) {
     if (!ctx_ || history_.empty()) return "No conversation has started.";
     stop_.store(false);
-    std::string err = decode_text(format_delta(msg, false), false, false);
+    std::string delta;
+    try {
+        delta = format_delta(msg, false);
+    } catch (const std::exception & e) {
+        return std::string("chat template: ") + e.what();
+    }
+    std::string err = decode_text(delta, false, false);
     if (!err.empty()) return err;
     history_.push_back(msg);
     return "";
@@ -221,7 +299,15 @@ GenerateResult Engine::generate(const std::string & user, int max_tokens, float 
     const auto started = Clock::now();
     Message msg{"user", user};
     const int before = n_past_;
-    std::string err = decode_text(format_delta(msg, true), false, true);
+    std::string delta;
+    try {
+        delta = format_delta(msg, true);
+    } catch (const std::exception & e) {
+        r.status = -1;
+        r.error = std::string("chat template: ") + e.what();
+        return r;
+    }
+    std::string err = decode_text(delta, false, true);
     r.prompt_tokens = n_past_ - before;
     if (err == "context-full") {
         r.status = -2;

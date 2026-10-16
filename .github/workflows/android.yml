@@ -46,27 +46,43 @@ jobs:
           PY
 
   voice:
-    name: Kokoro voice archive
+    name: Voice archives and speed
     runs-on: ubuntu-latest
     steps:
-      - name: Archive layout and test sentences
+      - name: Download voices
         run: |
-          curl -sSL -o k.tar.bz2 https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/kokoro-int8-multi-lang-v1_0.tar.bz2
-          stat -c %s k.tar.bz2
-          tar xf k.tar.bz2 && ls -la kokoro-int8-multi-lang-v1_0
+          for a in kokoro-int8-multi-lang-v1_0 kokoro-multi-lang-v1_0 kitten-nano-en-v0_8-int8 kitten-mini-en-v0_8; do
+            curl -sSL https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/$a.tar.bz2 | tar xj
+          done
+          ls -la kokoro-int8-multi-lang-v1_0 kitten-nano-en-v0_8-int8 kitten-mini-en-v0_8
           pip install -q sherpa-onnx
+      - name: Real-time factor (lower is faster; above 1 cannot keep up)
+        run: |
           python3 - <<'PY'
-          import sherpa_onnx, time, os
-          d = "kokoro-int8-multi-lang-v1_0"
-          model = f"{d}/model.int8.onnx" if os.path.exists(f"{d}/model.int8.onnx") else f"{d}/model.onnx"
-          print("model file:", model)
-          tts = sherpa_onnx.OfflineTts(sherpa_onnx.OfflineTtsConfig(model=sherpa_onnx.OfflineTtsModelConfig(
-              kokoro=sherpa_onnx.OfflineTtsKokoroModelConfig(model=model, voices=f"{d}/voices.bin", tokens=f"{d}/tokens.txt",
-                  data_dir=f"{d}/espeak-ng-data", lexicon=f"{d}/lexicon-us-en.txt"), num_threads=2)))
-          for sid, speed in [(3, 1.0), (3, 1.3), (2, 1.0), (21, 1.0)]:
-              t = time.time()
-              a = tts.generate("That sounds like a heavy morning. Let's pick one tiny thing.", sid=sid, speed=speed)
-              print(f"sid {sid} speed {speed}: {len(a.samples)/a.sample_rate:.2f}s audio in {time.time()-t:.2f}s")
+          import sherpa_onnx as so, time, os, glob
+          text = "That sounds like a heavy morning. Let's pick one tiny thing, and do just that."
+          def kokoro(d, model, threads):
+              return so.OfflineTts(so.OfflineTtsConfig(model=so.OfflineTtsModelConfig(kokoro=so.OfflineTtsKokoroModelConfig(
+                  model=f"{d}/{model}", voices=f"{d}/voices.bin", tokens=f"{d}/tokens.txt", data_dir=f"{d}/espeak-ng-data",
+                  lexicon=f"{d}/lexicon-us-en.txt"), num_threads=threads)))
+          def kitten(d, threads):
+              model = sorted(glob.glob(f"{d}/*.onnx"))[0]
+              return so.OfflineTts(so.OfflineTtsConfig(model=so.OfflineTtsModelConfig(kitten=so.OfflineTtsKittenModelConfig(
+                  model=model, voices=f"{d}/voices.bin", tokens=f"{d}/tokens.txt", data_dir=f"{d}/espeak-ng-data"), num_threads=threads)))
+          cases = [("kokoro int8", lambda t: kokoro("kokoro-int8-multi-lang-v1_0", "model.int8.onnx", t), 3),
+                   ("kokoro fp32", lambda t: kokoro("kokoro-multi-lang-v1_0", "model.onnx", t), 3),
+                   ("kitten nano int8", lambda t: kitten("kitten-nano-en-v0_8-int8", t), 0),
+                   ("kitten mini", lambda t: kitten("kitten-mini-en-v0_8", t), 0)]
+          for name, make, sid in cases:
+              for threads in (2, 4):
+                  try:
+                      tts = make(threads)
+                      tts.generate("Hi.", sid=sid, speed=1.0)
+                      t = time.time(); a = tts.generate(text, sid=sid, speed=1.0); dt = time.time() - t
+                      dur = len(a.samples) / a.sample_rate
+                      print(f"{name:18s} threads {threads}: {dur:.2f}s audio in {dt:.2f}s  RTF {dt/dur:.2f}  speakers {tts.num_speakers}")
+                  except Exception as e:
+                      print(f"{name:18s} threads {threads}: FAILED {e}")
           PY
 
   apk:

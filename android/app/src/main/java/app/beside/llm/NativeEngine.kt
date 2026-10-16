@@ -23,7 +23,7 @@ class NativeEngine {
     fun load(path: String, nCtx: Int, threads: Int): String = nativeLoad(handle, path, nCtx, threads)
     fun unload() = nativeUnload(handle)
     fun describe(): String = nativeDescribe(handle)
-    fun setSystem(text: String): String = nativeSetSystem(handle, text.toByteArray())
+    fun setSystem(text: String, cachePath: String = ""): String = nativeSetSystem(handle, text.toByteArray(), cachePath)
     fun reset(): String = nativeReset(handle)
     fun append(role: String, content: String): String = nativeAppend(handle, role, content.toByteArray())
     fun stop() = nativeStop(handle)
@@ -45,7 +45,7 @@ class NativeEngine {
     private external fun nativeLoad(h: Long, path: String, nCtx: Int, threads: Int): String
     private external fun nativeUnload(h: Long)
     private external fun nativeDescribe(h: Long): String
-    private external fun nativeSetSystem(h: Long, text: ByteArray): String
+    private external fun nativeSetSystem(h: Long, text: ByteArray, cachePath: String): String
     private external fun nativeReset(h: Long): String
     private external fun nativeAppend(h: Long, role: String, content: ByteArray): String
     private external fun nativeStop(h: Long)

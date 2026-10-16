@@ -58,8 +58,8 @@ JNIEXPORT jstring JNICALL Java_app_beside_llm_NativeEngine_nativeDescribe(JNIEnv
 }
 
 JNIEXPORT jstring JNICALL Java_app_beside_llm_NativeEngine_nativeSetSystem(JNIEnv * env, jobject, jlong h,
-                                                                           jbyteArray text) {
-    return jstr(env, self(h)->set_system(bytes(env, text)));
+                                                                           jbyteArray text, jstring cache_path) {
+    return jstr(env, self(h)->set_system(bytes(env, text), str(env, cache_path)));
 }
 
 JNIEXPORT jstring JNICALL Java_app_beside_llm_NativeEngine_nativeReset(JNIEnv * env, jobject, jlong h) {

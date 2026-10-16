@@ -16,11 +16,14 @@ class ChatSession(private val engine: NativeEngine = NativeEngine()) {
 
     var description: String = ""
         private set
+    // The processed system prompt is saved next to the model, so later launches skip re-reading it.
+    private var systemCache = ""
 
     suspend fun load(path: String, system: String, threads: Int): String = withContext(thread) {
         val err = engine.load(path, CONTEXT, threads)
         if (err.isNotEmpty()) return@withContext err
         description = engine.describe()
+        systemCache = "$path.system-cache"
         setSystemLocked(system)
     }
 
@@ -29,7 +32,7 @@ class ChatSession(private val engine: NativeEngine = NativeEngine()) {
     private fun setSystemLocked(system: String): String {
         chatId = null
         synced = -1
-        return engine.setSystem(system)
+        return engine.setSystem(system, systemCache)
     }
 
     suspend fun unload() = withContext(thread) {
