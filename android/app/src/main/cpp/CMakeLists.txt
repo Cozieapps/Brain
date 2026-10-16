@@ -31,6 +31,6 @@ else()
     FetchContent_MakeAvailable(llama)
 endif()
 
-add_library(beside SHARED engine.cpp jni.cpp)
+add_library(beside SHARED engine.cpp chat_format.cpp jni.cpp)
 target_link_libraries(beside PRIVATE llama-common llama android log)
 target_link_options(beside PRIVATE "-Wl,-z,max-page-size=16384")

@@ -49,11 +49,14 @@ fun findModel(id: String): ModelChoice? = MODELS.firstOrNull { it.id == id }
 fun recommendedModel(totalRamGb: Double): ModelChoice =
     if (totalRamGb >= 7.0) MODELS.first { it.id == "qwen3.5-4b" } else MODELS.first { it.id == "qwen3.5-2b" }
 
-/** Kokoro v1.0 (int8) from sherpa-onnx; speaker ids come from the model's own metadata. */
+/**
+ * Kokoro v1.0 from sherpa-onnx; speaker ids come from the model's own metadata. The full-precision
+ * build is used because on CPUs it renders about twice as fast as the int8 one (measured in CI).
+ */
 object KokoroModel {
-    const val URL = "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/kokoro-int8-multi-lang-v1_0.tar.bz2"
-    const val BYTES = 132_303_094L
-    const val DIR = "kokoro-int8-multi-lang-v1_0"
+    const val URL = "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/kokoro-multi-lang-v1_0.tar.bz2"
+    const val BYTES = 349_906_910L
+    const val DIR = "kokoro-multi-lang-v1_0"
 }
 
 data class VoiceChoice(val id: String, val sid: Int, val name: String, val accent: String, val note: String)

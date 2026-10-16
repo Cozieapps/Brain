@@ -69,10 +69,8 @@ std::string Engine::load(const std::string & path, int n_ctx, int n_threads) {
     }
     batch_ = new common_batch(ctx_);
     templates_ = common_chat_templates_init(model_, "").release();
-
     const llama_vocab * vocab = llama_model_get_vocab(model_);
-    add_bos_ = llama_vocab_get_add_bos(vocab);
-    add_eos_ = llama_vocab_get_add_eos(vocab);
+    fmt_ = std::make_unique<ChatFormat>(templates_, llama_vocab_get_add_bos(vocab), llama_vocab_get_add_eos(vocab));
 
     common_params_sampling sp;
     sp.temp = 0.7f;
@@ -90,6 +88,7 @@ std::string Engine::load(const std::string & path, int n_ctx, int n_threads) {
 }
 
 void Engine::unload() {
+    fmt_.reset();
     if (sampler_) common_sampler_free(sampler_);
     if (templates_) common_chat_templates_free(templates_);
     delete batch_;
@@ -100,7 +99,6 @@ void Engine::unload() {
     batch_ = nullptr;
     ctx_ = nullptr;
     model_ = nullptr;
-    history_.clear();
     system_state_.clear();
     system_n_past_ = 0;
     n_past_ = 0;
@@ -117,59 +115,6 @@ std::string Engine::describe() const {
 }
 
 int Engine::n_ctx() const { return ctx_ ? (int) llama_n_ctx(ctx_) : 0; }
-
-std::string Engine::render(const std::vector<Message> & msgs, bool add_generation_prompt) {
-    common_chat_templates_inputs in;
-    in.use_jinja = true;
-    in.enable_thinking = false;  // Qwen answers straight away instead of reasoning first
-    in.chat_template_kwargs["enable_thinking"] = "false";
-    in.add_bos = add_bos_;
-    in.add_eos = add_eos_;
-    in.add_generation_prompt = add_generation_prompt;
-    for (const auto & m : msgs) {
-        common_chat_msg c;
-        c.role = m.role;
-        c.content = m.content;
-        in.messages.push_back(c);
-    }
-    return common_chat_templates_apply(templates_, in).prompt.str();
-}
-
-// The text a conversation starts with, up to where the first user message's words go.
-// Some templates refuse a system prompt on its own (Qwen 3.5) or fold it into the first
-// user turn (older Gemma), so render two different first messages and keep what they share.
-std::string Engine::system_prefix(const std::string & system) {
-    const std::string a = render({{"system", system}, {"user", "\x01"}}, false);
-    const std::string b = render({{"system", system}, {"user", "\x02"}}, false);
-    size_t n = 0;
-    while (n < a.size() && n < b.size() && a[n] == b[n]) ++n;
-    return a.substr(0, n);
-}
-
-// Text added to the prompt by one more message: the history rendered with and without it.
-std::string Engine::format_delta(const Message & msg, bool add_generation_prompt) {
-    std::string before;
-    if (history_.size() <= 1) {
-        before = system_text_;  // only the system prompt is in memory
-    } else {
-        try {
-            before = render(history_, false);
-        } catch (const std::exception &) {
-            before.clear();
-        }
-    }
-    std::vector<Message> next = history_;
-    next.push_back(msg);
-    const std::string after = render(next, add_generation_prompt);
-    std::string delta;
-    // The generated reply ends at its end-of-turn token; the template adds a newline after it.
-    if (history_.size() > 1 && !before.empty() && before.back() == '\n') delta = "\n";
-    if (!before.empty() && after.compare(0, before.size(), before) == 0)
-        delta += after.substr(before.size());
-    else
-        delta += after.substr(std::min(after.size(), system_text_.size()));
-    return delta;
-}
 
 std::string Engine::decode_text(const std::string & text, bool first, bool want_logits) {
     auto tokens = common_tokenize(ctx_, text, /*add_special=*/first, /*parse_special=*/true);
@@ -233,26 +178,23 @@ void write_cache(const std::string & path, const std::string & key, int n_past, 
 std::string Engine::set_system(const std::string & system, const std::string & cache_path) {
     if (!ctx_) return "No model is loaded.";
     llama_memory_clear(llama_get_memory(ctx_), true);
-    history_.clear();
     n_past_ = 0;
     stop_.store(false);
+    std::string text;
     try {
-        system_text_ = system_prefix(system);
+        text = fmt_->start(system);
     } catch (const std::exception & e) {
         return std::string("This model's chat template failed: ") + e.what();
     }
-    const Message msg{"system", system};
-    const std::string key = describe() + "\n" + system_text_;
+    const std::string key = describe() + "\n" + text;
     if (!cache_path.empty() && read_cache(cache_path, key, system_n_past_, system_state_) &&
         llama_state_seq_set_data(ctx_, system_state_.data(), system_state_.size(), 0) != 0) {
         n_past_ = system_n_past_;
-        history_.push_back(msg);
         return "";
     }
     llama_memory_clear(llama_get_memory(ctx_), true);
-    std::string err = decode_text(system_text_, /*first=*/true, false);
+    std::string err = decode_text(text, /*first=*/true, false);
     if (!err.empty()) return "Couldn't read the system prompt (" + err + ").";
-    history_.push_back(msg);
     system_n_past_ = n_past_;
     system_state_.resize(llama_state_seq_get_size(ctx_, 0));
     llama_state_seq_get_data(ctx_, system_state_.data(), system_state_.size(), 0);
@@ -261,35 +203,32 @@ std::string Engine::set_system(const std::string & system, const std::string & c
 }
 
 std::string Engine::reset_to_system() {
-    if (!ctx_ || history_.empty()) return "No conversation has started.";
-    if (history_.size() == 1) return "";
+    if (!ctx_ || !fmt_ || fmt_->size() == 0) return "No conversation has started.";
+    if (fmt_->size() == 1) return "";
     llama_memory_clear(llama_get_memory(ctx_), true);
     if (llama_state_seq_set_data(ctx_, system_state_.data(), system_state_.size(), 0) == 0)
         return "Couldn't restore the saved system prompt.";
-    history_.resize(1);
+    fmt_->rewind();
     n_past_ = system_n_past_;
     return "";
 }
 
 std::string Engine::append(const Message & msg) {
-    if (!ctx_ || history_.empty()) return "No conversation has started.";
+    if (!ctx_ || !fmt_ || fmt_->size() == 0) return "No conversation has started.";
     stop_.store(false);
     std::string delta;
     try {
-        delta = format_delta(msg, false);
+        delta = fmt_->next(msg, false);
     } catch (const std::exception & e) {
         return std::string("chat template: ") + e.what();
     }
-    std::string err = decode_text(delta, false, false);
-    if (!err.empty()) return err;
-    history_.push_back(msg);
-    return "";
+    return decode_text(delta, false, false);
 }
 
 GenerateResult Engine::generate(const std::string & user, int max_tokens, float temperature,
                                 const std::function<bool(const std::string &)> & on_piece) {
     GenerateResult r;
-    if (!ctx_ || history_.empty()) {
+    if (!ctx_ || !fmt_ || fmt_->size() == 0) {
         r.status = -1;
         r.error = "The model isn't ready yet.";
         return r;
@@ -301,7 +240,7 @@ GenerateResult Engine::generate(const std::string & user, int max_tokens, float 
     const int before = n_past_;
     std::string delta;
     try {
-        delta = format_delta(msg, true);
+        delta = fmt_->next(msg, true);
     } catch (const std::exception & e) {
         r.status = -1;
         r.error = std::string("chat template: ") + e.what();
@@ -318,11 +257,10 @@ GenerateResult Engine::generate(const std::string & user, int max_tokens, float 
         r.error = err;
         return r;
     }
-    history_.push_back(msg);
-
     common_sampler_reset(sampler_);
     const llama_vocab * vocab = llama_model_get_vocab(model_);
     std::string pending;
+    std::string tail;  // the end-of-turn token's text, already in memory
     Clock::time_point first_at;
     for (int i = 0; i < max_tokens; ++i) {
         if (stop_.load()) {
@@ -346,7 +284,10 @@ GenerateResult Engine::generate(const std::string & user, int max_tokens, float 
             break;
         }
         ++n_past_;
-        if (eog) break;
+        if (eog) {
+            tail = common_token_to_piece(ctx_, tok, true);
+            break;
+        }
         ++r.tokens;
         pending += common_token_to_piece(ctx_, tok, false);
         const size_t ok = utf8_complete_prefix(pending);
@@ -364,7 +305,7 @@ GenerateResult Engine::generate(const std::string & user, int max_tokens, float 
         const double gen_ms = ms_since(first_at);
         r.tokens_per_second = gen_ms > 0 ? (r.tokens - 1) * 1000.0 / gen_ms : 0;
     }
-    history_.push_back({"assistant", r.text});
+    fmt_->generated(r.text, tail);
     return r;
 }
 

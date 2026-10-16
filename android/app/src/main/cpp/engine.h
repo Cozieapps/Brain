@@ -6,7 +6,10 @@
 #include <cstdint>
 #include <functional>
 #include <string>
+#include <memory>
 #include <vector>
+
+#include "chat_format.h"
 
 struct llama_model;
 struct llama_context;
@@ -15,11 +18,6 @@ struct common_chat_templates;
 struct common_batch;
 
 namespace beside {
-
-struct Message {
-    std::string role;  // "system", "user" or "assistant"
-    std::string content;
-};
 
 struct GenerateResult {
     int status = 0;  // 0 ok, 1 stopped, -1 error, -2 context full
@@ -58,12 +56,9 @@ class Engine {
 
     int n_past() const { return n_past_; }
     int n_ctx() const;
-    int history_size() const { return (int) history_.size(); }
+    int history_size() const { return fmt_ ? (int) fmt_->size() : 0; }
 
   private:
-    std::string render(const std::vector<Message> & msgs, bool add_generation_prompt);
-    std::string system_prefix(const std::string & system);
-    std::string format_delta(const Message & msg, bool add_generation_prompt);
     std::string decode_text(const std::string & text, bool first, bool want_logits);
 
     llama_model * model_ = nullptr;
@@ -71,9 +66,8 @@ class Engine {
     common_sampler * sampler_ = nullptr;
     common_chat_templates * templates_ = nullptr;
     common_batch * batch_ = nullptr;
-    std::vector<Message> history_;
+    std::unique_ptr<ChatFormat> fmt_;
     std::vector<uint8_t> system_state_;
-    std::string system_text_;  // exactly what the system snapshot contains
     int system_n_past_ = 0;
     int n_past_ = 0;
     int n_batch_ = 256;

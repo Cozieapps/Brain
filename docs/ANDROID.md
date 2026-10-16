@@ -6,7 +6,7 @@
 
 1. Get `beside-release.apk`, either from the **Android** workflow run's **beside-apk** artifact on GitHub or built yourself (below).
 2. Copy it to the tablet and open it. Allow "Install unknown apps" for the app you opened it with (Files or Chrome) when asked.
-3. Open **Beside**. The setup sheet suggests a model for the tablet's memory. Tap **Download and start** on Wi-Fi, with the tablet plugged in. The natural voice (130 MB) downloads straight after.
+3. Open **Beside**. The setup sheet suggests a model for the tablet's memory. Tap **Download and start** on Wi-Fi, with the tablet plugged in. The natural voice (350 MB) downloads straight after.
 4. When the dot next to the model name turns green, it's running. Turn Wi-Fi off if you like; everything keeps working.
 
 No internet on the tablet at all? Copy a `.gguf` file onto it, then use **Settings → Privacy & storage → Choose a model file**. You can also copy it into `Android/data/app.beside.companion/files/models/` over USB.
@@ -33,7 +33,7 @@ Q4_0 builds are used on purpose. llama.cpp repacks them at load time for the Exy
 - **Native llama.cpp (b11700)** runs on the four big cores, built for ARMv8.2 with dot-product and fp16. No browser overhead.
 - **Thinking is switched off** for Qwen (via the model's own chat template), so it answers instead of reasoning first.
 - **The model never re-reads the chat.** Each turn only processes the new message. The ~900-token instructions are processed once and saved next to the model file. Later launches and chat switches load that snapshot instead of re-reading it, so only the very first start is slow.
-- **Kokoro v1.0** (int8, via sherpa-onnx) speaks. Sentences are rendered on their own thread while the model is still writing, and the first phrase starts within moments. Silence is trimmed and even pauses are added (longer after a question). Speed is applied inside the voice model, which re-paces the speech. It never fast-forwards audio, which is what made other voices sound robotic when sped up. Heart (af_heart), Bella, Nicole and Emma are its best-rated voices.
+- **Kokoro v1.0** (full precision, via sherpa-onnx; it renders about twice as fast on CPUs as the int8 build) speaks. Sentences are rendered on their own thread while the model is still writing, and the first phrase starts within moments. Silence is trimmed and even pauses are added (longer after a question). Speed is applied inside the voice model, which re-paces the speech. It never fast-forwards audio, which is what made other voices sound robotic when sped up. Heart (af_heart), Bella, Nicole and Emma are its best-rated voices.
 - **Replies are written to be spoken:** short sentences and contractions, with no lists, markdown or emoji unless asked. The text is cleaned again before it reaches the voice.
 - The tablet's own TTS is used until Kokoro is ready, or if you prefer it.
 

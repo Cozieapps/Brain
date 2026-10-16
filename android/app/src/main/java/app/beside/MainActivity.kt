@@ -62,6 +62,7 @@ class MainActivity : ComponentActivity() {
         val toast by vm.toast.collectAsStateWithLifecycle()
         val showSettings by vm.showSettings.collectAsStateWithLifecycle()
         val filesVersion by vm.filesVersion.collectAsStateWithLifecycle()
+        val voiceRtf by vm.speaker.realTimeFactor.collectAsStateWithLifecycle()
 
         // Keep the screen awake during long downloads so they aren't interrupted.
         LaunchedEffect(model is LoadState.Working || voice is LoadState.Working) {
@@ -83,6 +84,7 @@ class MainActivity : ComponentActivity() {
             timer = timer, now = now, toast = toast, showSettings = showSettings,
             downloaded = files.first, customFiles = files.second, voiceDownloaded = files.third,
             ramGb = vm.ramGb, recommendedId = vm.recommended.id, freeGb = vm.files.freeBytes() / 1e9,
+            voiceRtf = voiceRtf,
         )
         BesideTheme(settings.theme, settings.textScale) { BesideScreen(state, actions) }
     }

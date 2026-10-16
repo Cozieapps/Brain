@@ -50,6 +50,11 @@ int main(int argc, char ** argv) {
     auto a = turn("I can't get started on the laundry. Please add it as a task.");
     auto b = turn("Thanks. What was the task you just added?");
     if (a.status != 0 || b.status != 0 || a.tokens == 0 || b.tokens == 0) return 1;
+    // A follow-up must only add itself, never re-send the earlier turns.
+    if (b.prompt_tokens > 40) {
+        fprintf(stderr, "second turn re-sent history (%d prompt tokens)\n", b.prompt_tokens);
+        return 1;
+    }
     if (a.text.find("<think>") != std::string::npos) {
         fprintf(stderr, "thinking was not disabled\n");
         return 1;

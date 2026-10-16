@@ -15,7 +15,11 @@ jobs:
       - name: Build engine test
         run: |
           cmake -S android/native-test -B /tmp/nt -DLLAMA_SRC=/tmp/llama.cpp -DCMAKE_BUILD_TYPE=Release
-          cmake --build /tmp/nt -j4 --target beside-test
+          cmake --build /tmp/nt -j4 --target beside-test beside-format-test
+      - name: Chat templates add each turn exactly once
+        run: |
+          T=/tmp/llama.cpp/models/templates
+          /tmp/nt/beside-format-test $T/Qwen3.5-4B.jinja $T/Qwen-Qwen3-0.6B.jinja $T/google-gemma-4-31B-it.jinja $T/google-gemma-2-2b-it.jinja
       - name: Qwen 3.5 0.8B
         run: |
           curl -sSL -o /tmp/m.gguf https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/main/Qwen3.5-0.8B-Q4_0.gguf
@@ -54,7 +58,7 @@ jobs:
           for a in kokoro-int8-multi-lang-v1_0 kokoro-multi-lang-v1_0 kitten-nano-en-v0_8-int8 kitten-mini-en-v0_8; do
             curl -sSL https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/$a.tar.bz2 | tar xj
           done
-          ls -la kokoro-int8-multi-lang-v1_0 kitten-nano-en-v0_8-int8 kitten-mini-en-v0_8
+          ls -la kokoro-multi-lang-v1_0 kokoro-int8-multi-lang-v1_0 kitten-nano-en-v0_8-int8
           pip install -q sherpa-onnx
       - name: Real-time factor (lower is faster; above 1 cannot keep up)
         run: |

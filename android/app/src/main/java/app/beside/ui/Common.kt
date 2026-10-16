@@ -68,6 +68,7 @@ data class UiState(
     val ramGb: Double = 8.0,
     val recommendedId: String = "qwen3.5-4b",
     val freeGb: Double = 50.0,
+    val voiceRtf: Float? = null,
 ) {
     val activeChat get() = data.chats.firstOrNull { it.id == activeChatId }
     val generating get() = draft != null

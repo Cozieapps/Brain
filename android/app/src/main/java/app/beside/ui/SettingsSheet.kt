@@ -184,7 +184,7 @@ private fun VoiceTab(state: UiState, actions: UiActions) {
     val c = Beside.colors
     val s = state.settings
     Text(
-        "Kokoro is a natural neural voice that runs on the tablet (about 130 MB). Beside starts speaking after the first phrase, so you don't wait for the whole answer.",
+        "Kokoro is a natural neural voice that runs on the tablet (a 350 MB download). Beside starts speaking after the first phrase, so you don't wait for the whole answer.",
         style = MaterialTheme.typography.bodyLarge,
     )
     SwitchRow("Read every reply aloud", s.autoSpeak) { v -> actions.updateSettings { it.copy(autoSpeak = v) } }
@@ -210,6 +210,13 @@ private fun VoiceTab(state: UiState, actions: UiActions) {
             actions::downloadVoice, Icons.Outlined.Download, enabled = state.voice !is LoadState.Working,
         )
         LoadProgress(state.voice)
+        state.voiceRtf?.let { rtf ->
+            Text(
+                if (rtf < 0.9f) "On this tablet the voice renders a second of speech in %.1f seconds, fast enough to keep up.".format(rtf)
+                else "On this tablet the voice renders a second of speech in %.1f seconds, so long replies may pause between sentences. The tablet's built-in voice is instant.".format(rtf),
+                color = if (rtf < 0.9f) c.muted else c.accentText, style = MaterialTheme.typography.bodySmall,
+            )
+        }
     }
     Column {
         Text("Speaking speed  %.2f×".format(s.speed), style = MaterialTheme.typography.titleSmall)

@@ -56,6 +56,10 @@ class Speaker(private val context: Context, private val settings: () -> SpeechSe
     private val _kokoroReady = MutableStateFlow(false)
     val kokoroReady: StateFlow<Boolean> = _kokoroReady
 
+    /** Seconds needed to render one second of speech on this device; above 1 it can't keep up. */
+    private val _realTimeFactor = MutableStateFlow<Float?>(null)
+    val realTimeFactor: StateFlow<Float?> = _realTimeFactor
+
     private val synthThread = Executors.newSingleThreadExecutor { r -> Thread(r, "beside-voice") }.asCoroutineDispatcher()
     private val scope = CoroutineScope(SupervisorJob() + synthThread)
     private val generation = AtomicInteger(0)
@@ -94,6 +98,10 @@ class Speaker(private val context: Context, private val settings: () -> SpeechSe
                 )
                 val t = OfflineTts(null, config)
                 t.generate("Hi.", settings().sid, 1f) // warm up
+                val started = System.nanoTime()
+                val sample = t.generate("Let's pick one small thing, and do just that.", settings().sid, 1f)
+                val seconds = sample.samples.size.toFloat() / sample.sampleRate
+                if (seconds > 0) _realTimeFactor.value = (System.nanoTime() - started) / 1e9f / seconds
                 tts = t
             }.exceptionOrNull()?.message
             _kokoroReady.value = err == null
