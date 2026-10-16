@@ -22,15 +22,15 @@ jobs:
           /tmp/nt/beside-format-test $T/Qwen3.5-4B.jinja $T/Qwen-Qwen3-0.6B.jinja $T/google-gemma-4-31B-it.jinja $T/google-gemma-2-2b-it.jinja
       - name: Qwen 3.5 0.8B
         run: |
-          curl -sSL -o /tmp/m.gguf https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/main/Qwen3.5-0.8B-Q4_0.gguf
+          curl -sSL --retry 5 --retry-all-errors -o /tmp/m.gguf https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/main/Qwen3.5-0.8B-Q4_0.gguf
           /tmp/nt/beside-test /tmp/m.gguf
       - name: Gemma 4 E2B
         run: |
-          curl -sSL -o /tmp/m.gguf https://huggingface.co/ggml-org/gemma-4-E2B-it-GGUF/resolve/main/gemma-4-E2B-it-Q4_0.gguf
+          curl -sSL --retry 5 --retry-all-errors -o /tmp/m.gguf https://huggingface.co/ggml-org/gemma-4-E2B-it-GGUF/resolve/main/gemma-4-E2B-it-Q4_0.gguf
           /tmp/nt/beside-test /tmp/m.gguf
       - name: Qwen 3 4B Instruct
         run: |
-          curl -sSL -o /tmp/m.gguf https://huggingface.co/unsloth/Qwen3-4B-Instruct-2507-GGUF/resolve/main/Qwen3-4B-Instruct-2507-Q4_0.gguf
+          curl -sSL --retry 5 --retry-all-errors -o /tmp/m.gguf https://huggingface.co/unsloth/Qwen3-4B-Instruct-2507-GGUF/resolve/main/Qwen3-4B-Instruct-2507-Q4_0.gguf
           /tmp/nt/beside-test /tmp/m.gguf
       - name: Model files match the app catalog
         run: |
@@ -56,7 +56,7 @@ jobs:
       - name: Download voices
         run: |
           for a in kokoro-int8-multi-lang-v1_0 kokoro-multi-lang-v1_0 kitten-nano-en-v0_8-int8 kitten-mini-en-v0_8; do
-            curl -sSL https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/$a.tar.bz2 | tar xj
+            curl -sSL --retry 5 --retry-all-errors https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/$a.tar.bz2 | tar xj
           done
           ls -la kokoro-multi-lang-v1_0 kokoro-int8-multi-lang-v1_0 kitten-nano-en-v0_8-int8
           pip install -q sherpa-onnx
@@ -95,9 +95,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
-        with: { distribution: temurin, java-version: 17 }
+        with: { distribution: temurin, java-version: 21 }
       - name: Android NDK and CMake
-        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;28.2.13676358" "cmake;3.31.0" "platforms;android-36" "build-tools;36.0.0" > /dev/null
+        run: |
+          for i in 1 2 3; do
+            yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;28.2.13676358" "cmake;3.31.0" "platforms;android-36" "build-tools;36.0.0" > /dev/null && exit 0
+            sleep 10
+          done
+          exit 1
       - name: Unit tests and APK
         working-directory: android
         run: ./gradlew --console=plain :app:testDebugUnitTest :app:assembleRelease

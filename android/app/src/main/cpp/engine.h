@@ -60,6 +60,7 @@ class Engine {
 
   private:
     std::string decode_text(const std::string & text, bool first, bool want_logits);
+    bool make_sampler(float temperature);
 
     llama_model * model_ = nullptr;
     llama_context * ctx_ = nullptr;
@@ -73,6 +74,7 @@ class Engine {
     int n_batch_ = 256;
     bool add_bos_ = false;
     bool add_eos_ = false;
+    float temperature_ = 0.7f;
     std::atomic<bool> stop_{false};
 };
 

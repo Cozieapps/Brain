@@ -38,7 +38,7 @@ int main(int argc, char ** argv) {
     printf("system prompt restored from cache\n");
     auto turn = [&](const char * user) {
         printf("\nUSER: %s\nBESIDE: ", user);
-        auto r = e.generate(user, 160, 0.7f, [](const std::string & p) {
+        auto r = e.generate(user, 160, 0.0f, [](const std::string & p) {
             fputs(p.c_str(), stdout);
             fflush(stdout);
             return true;
@@ -64,9 +64,9 @@ int main(int argc, char ** argv) {
         fprintf(stderr, "reset failed: %s\n", err.c_str());
         return 1;
     }
-    e.append({"user", "My name is Rosa."});
+    e.append({"user", "Hi! My name is Rosa."});
     e.append({"assistant", "Nice to meet you, Rosa."});
-    auto c = turn("What's my name?");
+    auto c = turn("What is my name? Answer with just my name.");
     if (c.status != 0 || c.text.find("Rosa") == std::string::npos) {
         fprintf(stderr, "replayed history was not remembered\n");
         return 1;

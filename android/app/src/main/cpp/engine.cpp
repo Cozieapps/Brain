@@ -72,19 +72,26 @@ std::string Engine::load(const std::string & path, int n_ctx, int n_threads) {
     const llama_vocab * vocab = llama_model_get_vocab(model_);
     fmt_ = std::make_unique<ChatFormat>(templates_, llama_vocab_get_add_bos(vocab), llama_vocab_get_add_eos(vocab));
 
+    if (!make_sampler(temperature_)) {
+        unload();
+        return "The sampler couldn't be created.";
+    }
+    return "";
+}
+
+// Temperature 0 means always the most likely word (used by tests for repeatable answers).
+bool Engine::make_sampler(float temperature) {
+    if (sampler_) common_sampler_free(sampler_);
     common_params_sampling sp;
-    sp.temp = 0.7f;
+    sp.temp = temperature;
     sp.top_k = 40;
     sp.top_p = 0.9f;
     sp.min_p = 0.05f;
     sp.penalty_last_n = 64;
     sp.penalty_repeat = 1.05f;
     sampler_ = common_sampler_init(model_, sp);
-    if (!sampler_) {
-        unload();
-        return "The sampler couldn't be created.";
-    }
-    return "";
+    temperature_ = temperature;
+    return sampler_ != nullptr;
 }
 
 void Engine::unload() {
@@ -233,7 +240,11 @@ GenerateResult Engine::generate(const std::string & user, int max_tokens, float 
         r.error = "The model isn't ready yet.";
         return r;
     }
-    (void) temperature;  // fixed in the sampler for now
+    if (temperature != temperature_ && !make_sampler(temperature)) {
+        r.status = -1;
+        r.error = "The sampler couldn't be created.";
+        return r;
+    }
     stop_.store(false);
     const auto started = Clock::now();
     Message msg{"user", user};

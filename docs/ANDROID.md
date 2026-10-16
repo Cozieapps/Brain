@@ -60,7 +60,7 @@ cd android
 # APK: android/app/build/outputs/apk/release/app-release.apk
 ```
 
-Needs JDK 17+, Android SDK 36 and NDK 28.2.13676358 (`sdkmanager "ndk;28.2.13676358" "cmake;3.31.0"`). llama.cpp is fetched at the pinned tag. Pass `-PllamaSrc=/path/to/llama.cpp` to use a local checkout.
+Needs JDK 21+, Android SDK 36 and NDK 28.2.13676358 (`sdkmanager "ndk;28.2.13676358" "cmake;3.31.0"`). llama.cpp is fetched at the pinned tag. Pass `-PllamaSrc=/path/to/llama.cpp` to use a local checkout.
 
 ## What's verified and what isn't
 
