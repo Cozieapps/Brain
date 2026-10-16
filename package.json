@@ -23,11 +23,14 @@
   },
   "dependencies": {
     "@hono/node-server": "^1.19.0",
+    "@huggingface/transformers": "4.3.1",
     "@js-temporal/polyfill": "^0.5.1",
     "hono": "^4.10.0",
     "ical.js": "^2.2.1",
     "jose": "^6.2.12",
+    "kokoro-js": "^1.2.1",
     "lucide-react": "^0.468.0",
+    "onnxruntime-web": "1.31.0-dev.20260914-8d85527a0",
     "proper-lockfile": "^4.1.2",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
@@ -48,5 +51,10 @@
     "vite": "^7.1.0",
     "vitest": "^3.2.0",
     "wrangler": "^4.45.0"
+  },
+  "overrides": {
+    "kokoro-js": {
+      "@huggingface/transformers": "$@huggingface/transformers"
+    }
   }
 }

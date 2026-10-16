@@ -1,0 +1,25 @@
+{
+  "name": "Beside — private voice companion",
+  "short_name": "Beside",
+  "description": "A private ADHD companion that runs entirely on your tablet and answers out loud.",
+  "start_url": "/offline.html",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#faf7f2",
+  "theme_color": "#faf7f2",
+  "icons": [
+    {
+      "src": "/beside-voice.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/beside-voice.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}

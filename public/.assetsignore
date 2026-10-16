@@ -1,0 +1,2 @@
+# Over Cloudflare's 25 MiB per-file limit; the app fetches a pinned copy once instead.
+assets/ort-wasm-*.wasm
